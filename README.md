@@ -1,4 +1,4 @@
-# A comparative case study of R packages for ordinal response regression models
+# A Systematic Review and Comparative Study of R Packages for Ordinal Response Regression Models
 
 ### Master in Bioinformatics and Biostatistics UOC-UB
 
