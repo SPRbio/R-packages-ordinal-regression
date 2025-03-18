@@ -1,0 +1,402 @@
+---
+title: "Systematic Review of R packages for Ordinal Response Regression Models"
+author: "Sergi Pujol Rigol"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Search for ordinal regression fitting packages in R CRAN repository 
+
+**Function findFn**
+
+```{r}
+library(sos)
+library(dplyr)
+library(utils)
+
+### Selection 1
+selection_1 <- findFn("{ordinal regression}", sortby = NULL, verbose = 1)
+selection_1 <- unique(selection_1$Package)
+
+### Selection 2
+
+# Generate a list of relevant keywords
+keywords <- c("ordinal", "Ordinal", "ordered", "Ordered", "regression", 
+              "Regression", "model", "Model", "logit", "Logit", "logistic", 
+              "Logistic", "probit", "Probit", "categorical", "Categorical",
+              "response", "Response", "GLMM", "glmm", "GLM", "glm")
+
+# Pairs to avoid
+avoid_pairs <- list(
+  c("ordinal", "Ordinal"),
+  c("ordered", "Ordered"),
+  c("regression", "Regression"),
+  c("model", "Model"),
+  c("logit", "Logit"),
+  c("logistic", "Logistic"),
+  c("probit", "Probit"),
+  c("categorical", "Categorical"),
+  c("response", "Response"),
+  c("GLMM", "glmm"),
+  c("GLM", "glm"),
+  c("GLM", "GLMM"),
+  c("GLM", "glmm"),
+  c("GLMM", "glm"),
+  c("glmm", "glm"),
+  c("ordinal", "ordered"),
+  c("Ordered", "Ordinal"),
+  c("Ordinal", "ordered"),
+  c("Ordered", "ordinal")
+)
+
+# Perform multiple findFn searches, combining three keywords at a time to 
+# identify packages that included at least three of them in their descriptions. 
+comb <- combn(keywords, 3, simplify = FALSE)
+include_keywords <- c("Ordinal", "ordinal", "Ordered", "ordered")
+comb_ord <- Filter(function(combinations) {
+  any(include_keywords %in% combinations)
+}, comb)
+
+valid_comb <- Filter(function(combinations) {
+  !any(sapply(avoid_pairs, function(pair) all(pair %in% combinations)))
+}, comb_ord)
+
+comb_def <- sapply(valid_comb, function(pair) paste(pair, collapse = " "))
+
+result <- lapply(comb_def, function(combinations) {
+  a <- findFn(combinations, sortby = NULL, verbose = 1)
+  a <- unique(a$Package)
+})
+
+# Filter packages appearing in at least seven different keyword combinations, 
+# reducing false positives while maintaining relevant results.
+packages <- unlist(result)
+count <- table(packages)
+packages_list <- names(count[count >= 7])
+packages_list
+
+# Generate a dataframe with packages' title and description.
+best_results <- data.frame()
+for (i in 1:length(packages_list)) {
+  url <- paste0("https://cran.r-project.org/web/packages/", 
+                packages_list[i], "/index.html")
+  
+  web_content <- rvest::read_html(url)
+  
+  package_title <- web_content %>%
+    rvest::html_element("h2") %>%
+    rvest::html_text(trim = TRUE)
+
+  description <- web_content %>%
+    rvest::html_element("p") %>%
+    rvest::html_text(trim = TRUE) %>%
+    paste(collapse = " ")
+  pack <- c(package_title, description)
+  print(pack)
+    
+  best_results <- rbind(best_results, pack)
+}
+
+colnames(best_results) <- c("Title", "Description")
+
+best_results <- as.data.frame(lapply(best_results, function(col) {
+  if (is.character(col)) {
+    gsub("\t", " ", col)
+  } else {
+    col
+  }
+}), stringsAsFactors = FALSE)
+
+# Exclude packages whose descriptions did not contain at least one of the 
+# following terms: “ordered”, “ordinal”, “regression” or “model”.
+best_results_ord <- best_results[grepl("ordered|ordinal|Ordered|Ordinal|
+                                       regression|Regression|Model|model", 
+                                       best_results[,2], ignore.case = TRUE), ]
+
+write.xlsx(best_results_ord, "/best_results_ord.xlsx") #Revise the list manually
+
+selection_2 <- c(sub(":.*", "", best_results_ord$Title))
+```
+
+**Manual search on CRAN package list**
+
+```{r}
+selection_3 <- c("BayesOrdDesign","bgms","BinOrdNonNor","bqror","clordr","crov",
+                 "CUB","discnorm", "DiscreteGapStatistic", "drord","glmnetcr",
+                 "glmpathcr","lcpm","lmmot","Loe","lordif","MABOUST","mgee2",
+                 "multgee","multiOrd","multOrdRS","mvord","ohenery","ohoegdm",
+                 "opa", "OPSR", "ordCD","ordDisp","ordgam","ordinal",
+                 "ordinalbayes","ordinalClust","ordinalCont","ordinalForest",
+                 "ordinalgmifs","ordinalLBM","ordinalNet","ordinalpattern",
+                 "ordinalRR","OrdNor","ordPens","ORION","ormPlot","otsfeatures",
+                 "Passo","PoisBinOrd","PoisBinOrdNonNor","PoisBinOrdNor",
+                 "RankAggregator","rankinPlot","Raters","Remiod","rpartScore",
+                 "sapevom","Sure","toOrdinal","brms","rms","MASS","VGAM","MXM",
+                 "gnlm","lme4","GLMMadaptative","psychotools","jrt","Hmisc",
+                 "Splus2R")
+```
+
+**Search on R-Universe with "ordinal regression"**
+
+```{r}
+selection_4 <- c("VGAM", "MXM","rstanarm","Hmisc","rcompanion","ordinalbayes",
+                 "ordinalNet","BayesOrdDesign","ormPlot","wisclabmisc",
+                 "monoreg","RcmdrPlugin.NMBU","ordinal","mvord","ordPens",
+                 "ordinalgmifs","gnlm","ordinalCont","lordif","ordinalForest",
+                 "glmmLasso","ordDisp","reportRmd","MPDiR")
+```
+
+Remove repeated packages
+
+```{r}
+ds <- c(selection_1, selection_2, selection_3, selection_4)
+ds_unique <- unique(ds)
+ds_repeated <- duplicated(ds)
+ds_repeated <- unique(ds[ds_repeated])
+print(ds[ds_repeated])
+```
+
+#Downloads count per year and plot
+
+Cumulative number of downloads of all the selected packages from 25 January 2015 to 25 January 2025.
+
+```{r}
+library(cranlogs)
+library(lubridate)
+library(dplyr)
+library(ggplot2)
+
+packages <- c("brms", "VGAM", "MachineShop", "rms", "multgee", "tram", 
+              "glmmLasso", "ordinalgmifs", "MASS", "ordinal", 
+              "BayesOrdDesign", "arm", "ordinalbayes", "ordinalNet", 
+              "mvord", "ordinalCont", "gnlm", "oglmx","MCMCglmm", "rstanarm",
+              "bqror", "drord", "glmnetcr", "glmpathcr",
+              "hopit", "monoreg", "MultOrdRS", "ordgam", "boral", "GLMcat",
+              "MNP", "serp", "tramME", "vcrpart", "Rchoice", "geepack",
+              "apollo", "plsRglm", "GMMBoost", "crov", "lcpm", "BGLR", "jmv",
+              "mixcat", "repolr", "R2MLwiN", "lcmm", "micsr")
+
+df_downloads <- data.frame()
+  
+for(package in packages){
+  downloads <- cran_downloads(package, from = "2015-01-25", to = "2025-01-25")
+  df_downloads <- rbind(df_downloads, downloads)
+}
+
+df_downloads$year_month <- ym(substr(df_downloads$date, 1, 7))
+
+df_downloads_grouped <- df_downloads %>%
+  group_by(year_month, package) %>%
+  summarise(count = sum(count))
+
+df_downloads_grouped$ac_count <- ave(df_downloads_grouped$count, 
+                                     df_downloads_grouped$package, FUN = cumsum)
+df_downloads_grouped$ac_count <- df_downloads_grouped$ac_count/1000
+
+#Group by magnitude of cumulative number of downloads
+df_downloads_1 <- df_downloads_grouped %>%
+  filter(package %in% c("MASS"))
+
+df_downloads_2 <- df_downloads_grouped %>%
+  filter(package %in% c("MCMCglmm","arm","VGAM","rms","ordinal","brms",
+                        "geepack","rstanarm","jmv"))
+
+df_downloads_3 <- df_downloads_grouped %>%
+  filter(package %in% c("tram","lcmm", "MNP","multgee","BGLR",
+                        "apollo", "boral", "Rchoice","ordinalCont", "plsRglm",
+                        "glmmLasso"))
+
+df_downloads_4 <- df_downloads_grouped %>%
+  filter(package %in% c("ordinalNet","bqror","GMMBoost", "glmnetcr",
+                        "MachineShop","R2MLwiN","oglmx","mvord"))
+
+df_downloads_5 <- df_downloads_grouped %>%
+  filter(package %in% c("vcrpart","glmpathcr","repolr", "gnlm", 
+                        "ordinalgmifs","mixcat","monoreg","tramME","serp",
+                        "crov","hopit"))
+
+df_downloads_6 <- df_downloads_grouped %>%
+  filter(package %in% c("lcpm","GLMcat","drord","BayesOrdDesign","MultOrdRS",
+                        "ordgam","ordinalbayes","micsr"))
+```
+
+Plots of the cumulative downloads
+
+```{r, fig.height=5, fig.width=5.5}
+ndownload_packages <- c("MASS","arm","rms","VGAM","ordinal","brms","geepack",
+                        "rstanarm","MCMCglmm","jmv","tram","lcmm", "MNP",
+                        "multgee","BGLR","apollo", "boral", "Rchoice",
+                        "ordinalCont", "plsRglm","glmmLasso","ordinalNet",
+                        "bqror","GMMBoost", "glmnetcr",
+                        "MachineShop","R2MLwiN","oglmx","mvord","vcrpart",
+                        "glmpathcr","OrdFacReg","repolr", "gnlm", 
+                        "ordinalgmifs","mixcat","monoreg","tramME","serp",
+                        "crov","hopit","lcpm","GLMcat","drord","BayesOrdDesign",
+                        "MultOrdRS","ordgam","ordinalbayes","micsr")
+
+custom_colors <- c("red2","palegreen4","mediumorchid1","tan","gold",
+                     "mediumpurple","palegreen2","hotpink","sienna",
+                     "steelblue1","orange","blue4", "lightpink")
+
+par(mfrow = c(3,2))
+
+plot1 <- ggplot(df_downloads_1, 
+                aes(x = year_month, y = ac_count, 
+                    color = factor(package, levels = ndownload_packages))) +
+  geom_path(linewidth = 1) +
+  labs(x = "Year",
+       y = expression(paste("Number of downloads (x ", 10^3, ")"))) +
+  theme_minimal() +
+  xlim(as.Date("2015-01-25"),as.Date("2025-01-25")) +
+  scale_colour_manual(values = custom_colors) +
+  theme(text = element_text(size = 16), 
+        axis.title = element_text(size = 18), 
+        axis.text = element_text(size = 14), 
+        plot.title = element_text(size = 20), 
+        legend.text = element_text(size = 16),
+        legend.position = "top",
+        legend.title = element_blank())
+
+plot2 <- ggplot(df_downloads_2, 
+                aes(x = year_month, y = ac_count, 
+                    color = factor(package, levels = ndownload_packages))) +
+  geom_path(linewidth = 1) +
+  labs(x = "Year",
+       y = expression(paste("Number of downloads (x ", 10^3, ")"))) +
+  theme_minimal() +
+  xlim(as.Date("2015-01-25"),as.Date("2025-01-25")) +
+  scale_colour_manual(values = custom_colors) +
+  theme(text = element_text(size = 16), 
+        axis.title = element_text(size = 18), 
+        axis.text = element_text(size = 14), 
+        plot.title = element_text(size = 20), 
+        legend.text = element_text(size = 16),
+        legend.position = "top",
+        legend.title = element_blank()) +
+  guides(color = guide_legend(nrow = 3))
+
+plot3 <- ggplot(df_downloads_3, 
+                aes(x = year_month, y = ac_count, 
+                    color = factor(package, levels = ndownload_packages))) +
+  geom_path(linewidth = 1) +
+  labs(x = "Year",
+       y = expression(paste("Number of downloads (x ", 10^3, ")"))) +
+  theme_minimal() +
+  xlim(as.Date("2015-01-25"),as.Date("2025-01-25")) +
+  scale_colour_manual(values = custom_colors) +
+  theme(text = element_text(size = 16), 
+        axis.title = element_text(size = 18), 
+        axis.text = element_text(size = 14), 
+        plot.title = element_text(size = 20), 
+        legend.text = element_text(size = 14),
+        legend.position = "top",
+        legend.title = element_blank()) +
+  guides(color = guide_legend(nrow = 3))
+
+plot4 <- ggplot(df_downloads_4, 
+                aes(x = year_month, y = ac_count, 
+                    color = factor(package, levels = ndownload_packages))) +
+  geom_path(linewidth = 1) +
+  labs(x = "Year",
+       y = expression(paste("Number of downloads (x ", 10^3, ")"))) +
+  theme_minimal() +
+  xlim(as.Date("2015-01-25"),as.Date("2025-01-25")) +
+  scale_colour_manual(values = custom_colors) +
+  theme(text = element_text(size = 16), 
+        axis.title = element_text(size = 18), 
+        axis.text = element_text(size = 14), 
+        plot.title = element_text(size = 20), 
+        legend.text = element_text(size = 14),
+        legend.position = "top",
+        legend.title = element_blank()) +
+  guides(color = guide_legend(nrow = 3))
+
+plot5 <- ggplot(df_downloads_5, 
+                aes(x = year_month, y = ac_count, 
+                    color = factor(package, levels = ndownload_packages))) +
+  geom_path(linewidth = 1) +
+  labs(x = "Year",
+       y = expression(paste("Number of downloads (x ", 10^3, ")"))) +
+  theme_minimal() +
+  xlim(as.Date("2015-01-25"),as.Date("2025-01-25")) +
+  scale_colour_manual(values = custom_colors) +
+  theme(text = element_text(size = 16), 
+        axis.title = element_text(size = 18), 
+        axis.text = element_text(size = 14), 
+        plot.title = element_text(size = 20), 
+        legend.text = element_text(size = 14),
+        legend.position = "top",
+        legend.title = element_blank()) +
+  guides(color = guide_legend(nrow = 3))
+
+plot6 <- ggplot(df_downloads_6, 
+                aes(x = year_month, y = ac_count, 
+                    color = factor(package, levels = ndownload_packages))) +
+  geom_path(linewidth = 1) +
+  labs(x = "Year",
+       y = expression(paste("Number of downloads (x ", 10^3, ")"))) +
+  theme_minimal() +
+  xlim(as.Date("2015-01-25"),as.Date("2025-01-25")) +
+  scale_colour_manual(values = custom_colors) +
+  theme(text = element_text(size = 16), 
+        axis.title = element_text(size = 18), 
+        axis.text = element_text(size = 14), 
+        plot.title = element_text(size = 20), 
+        legend.text = element_text(size = 14),
+        legend.position = "top",
+        legend.title = element_blank()) +
+  guides(color = guide_legend(nrow = 3))
+
+wd <- ""
+ggsave(paste0(wd, "down1.png"), plot = plot1, width = 8, height = 6)
+ggsave(paste0(wd, "down2.png"), plot = plot2, width = 8, height = 6)
+ggsave(paste0(wd, "down3.png"), plot = plot3, width = 8, height = 6)
+ggsave(paste0(wd, "down4.png"), plot = plot4, width = 8, height = 6)
+ggsave(paste0(wd, "down5.png"), plot = plot5, width = 8, height = 6)
+ggsave(paste0(wd, "down6.png"), plot = plot6, width = 8, height = 6)
+```
+
+#Creation and updates plot
+
+From a created dataset with the years of creation and updates of the different packages. Only ordinal regression specific packages were included.
+
+```{r}
+library(egg)
+
+updates <- data.frame()
+count <- 0
+
+for(year in 2009:2025){
+  for(i in 1:ncol(Update_year2)){
+    for(j in 1:nrow(na.omit(Update_year2[,i]))){
+      if(Update_year2[j,i] == year){
+        count <- count + 1
+      } else {
+        count <- count
+      }
+    }
+  }
+  df <- c(year, count)
+  updates <- rbind(updates, df)
+  count <- 0
+}
+
+colnames(updates) <- c("Year", "Count")
+updates$Year <- as.factor(updates$Year)
+
+ggplot(updates, aes(x = as.numeric(Year), y = Count)) +
+  geom_bar(stat = "identity", fill = "orange", alpha = 0.5) +
+  geom_smooth(formula = y ~ x, method = "loess", se = FALSE, color = "black") +
+  labs(title = "Updates per year",
+       x = "Year",
+       y = "Count") +
+  theme_minimal() +
+  theme(axis.title.x = element_text(size = 14),
+        axis.title.y = element_text(size = 14),
+        axis.text.x = element_text(size = 12, angle = 45, hjust = 1),
+        axis.text.y = element_text(size = 12))
+```
